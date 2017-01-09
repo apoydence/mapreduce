@@ -5,21 +5,22 @@ import "log"
 type ChainLink interface {
 	Map(m Mapper) ChainLink
 	Reduce(r Reducer) ChainLink
-	functions() []function
+	FinalReduce(r FinalReducer) Functions
 }
 
 type funcChainBuilder struct {
-	fs []function
+	fs []Function
 }
 
-type function struct {
-	mapper  Mapper
-	reducer Reducer
+type Function struct {
+	mapper       Mapper
+	reducer      Reducer
+	finalReducer FinalReducer
 }
 
 func Build(m Mapper) ChainLink {
 	return &funcChainBuilder{
-		fs: []function{{mapper: m}},
+		fs: []Function{{mapper: m}},
 	}
 }
 
@@ -28,7 +29,7 @@ func (b *funcChainBuilder) Map(m Mapper) ChainLink {
 		log.Panic("Mapper must not be nil")
 	}
 
-	b.fs = append(b.fs, function{mapper: m})
+	b.fs = append(b.fs, Function{mapper: m})
 	return b
 }
 
@@ -37,10 +38,19 @@ func (b *funcChainBuilder) Reduce(r Reducer) ChainLink {
 		log.Panic("Reducer must not be nil")
 	}
 
-	b.fs = append(b.fs, function{reducer: r})
+	b.fs = append(b.fs, Function{reducer: r})
 	return b
 }
 
-func (b *funcChainBuilder) functions() []function {
+func (b *funcChainBuilder) FinalReduce(r FinalReducer) Functions {
+	if r == nil {
+		log.Panic("Reducer must not be nil")
+	}
+
+	b.fs = append(b.fs, Function{finalReducer: r})
+	return b
+}
+
+func (b *funcChainBuilder) Functions() []Function {
 	return b.fs
 }

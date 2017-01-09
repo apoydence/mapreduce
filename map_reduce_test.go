@@ -65,7 +65,12 @@ func TestMapReduce(t *testing.T) {
 			mapIndex <- 1
 			mapValues <- value
 			return <-mapResultsKey, <-mapResultsOk
+		})).FinalReduce(mapreduce.FinalReduceFunc(func(value [][]byte) (reduced [][]byte) {
+			reduceIndex <- 1
+			reduceValue <- value
+			return <-reduceResult
 		}))
+
 		mr := mapreduce.New(mockFileSystem, mockNetwork, chain)
 
 		return TMR{
@@ -196,6 +201,7 @@ func TestMapReduce(t *testing.T) {
 				t.mockFileReader.ReadOutput.Ret1 <- io.EOF
 				t.reduceResult <- [][]byte{[]byte("some-reduced-data")}
 				t.reduceResult <- [][]byte{[]byte("some-reduced-data")}
+				t.reduceResult <- [][]byte{[]byte("some-reduced-data")}
 
 				t.mr.Calculate("some-name")
 
@@ -212,6 +218,58 @@ func TestMapReduce(t *testing.T) {
 					})),
 				))
 			})
+
+			o.Spec("it invokes FinalReduce until result is length 1", func(t TMR) {
+				for i := 0; i < 4; i++ {
+					t.mapResultsKey <- []byte("some-key-a")
+					t.mapResultsOk <- true
+				}
+				t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-1")
+				t.mockFileReader.ReadOutput.Ret1 <- nil
+				t.mockFileReader.ReadOutput.Ret0 <- nil
+				t.mockFileReader.ReadOutput.Ret1 <- io.EOF
+				t.reduceResult <- [][]byte{{'a'}, {'b'}, {'c'}}
+				t.reduceResult <- [][]byte{{'a'}, {'b'}}
+				t.reduceResult <- [][]byte{{'a'}}
+
+				t.mr.Calculate("some-name")
+
+				Expect(t, t.reduceResult).To(ViaPolling(HaveLen(0)))
+			})
+
+			o.Spec("it returns a result tree", func(t TMR) {
+				for i := 0; i < 4; i++ {
+					t.mapResultsKey <- []byte("some-key-a")
+					t.mapResultsOk <- true
+				}
+				t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-1")
+				t.mockFileReader.ReadOutput.Ret1 <- nil
+				t.mockFileReader.ReadOutput.Ret0 <- nil
+				t.mockFileReader.ReadOutput.Ret1 <- io.EOF
+				t.reduceResult <- [][]byte{{'a'}, {'b'}, {'c'}}
+				t.reduceResult <- [][]byte{{'a'}, {'b'}}
+				t.reduceResult <- [][]byte{{'a'}}
+
+				results, err := t.mr.Calculate("some-name")
+				Expect(t, err == nil).To(BeTrue())
+				Expect(t, results == nil).To(BeFalse())
+
+				_, isLeaf := results.Leaf()
+				Expect(t, isLeaf).To(BeFalse())
+				Expect(t, results.ChildrenKeys()).To(Contain(
+					[]byte("some-key-a"),
+				))
+				child := results.Child([]byte("some-key-a"))
+				Expect(t, child == nil).To(BeFalse())
+				_, isLeaf = child.Leaf()
+				Expect(t, isLeaf).To(BeFalse())
+
+				child = child.Child([]byte("some-key-a"))
+				Expect(t, child == nil).To(BeFalse())
+				value, isLeaf := child.Leaf()
+				Expect(t, isLeaf).To(BeTrue())
+				Expect(t, string(value)).To(Equal("a"))
+			})
 		})
 	})
 
@@ -223,7 +281,7 @@ func TestMapReduce(t *testing.T) {
 		})
 
 		o.Spec("it returns an error", func(t TMR) {
-			err := t.mr.Calculate("some-name")
+			_, err := t.mr.Calculate("some-name")
 			Expect(t, err == nil).To(BeFalse())
 		})
 	})
