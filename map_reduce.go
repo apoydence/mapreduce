@@ -69,11 +69,11 @@ func (r MapReduce) invokeChain(data [][]byte, results *Result, functions []Funct
 
 	if f.finalReducer != nil {
 		for {
-			newData := f.finalReducer.FinalReduce(data)
-			if len(newData) > 1 {
+			data = f.finalReducer.FinalReduce(data)
+			if len(data) > 1 {
 				continue
 			}
-			results.value = newData[0]
+			results.value = data[0]
 
 			return
 		}

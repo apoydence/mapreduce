@@ -15,22 +15,11 @@ import (
 
 type TMR struct {
 	*testing.T
-	mr mapreduce.MapReduce
 
 	mockFileSystem *mockFileSystem
 	mockNetwork    *mockNetwork
 
 	mockFileReader *mockFileReader
-
-	mapIndex    chan int
-	reduceIndex chan int
-
-	mapValues     chan []byte
-	mapResultsKey chan []byte
-	mapResultsOk  chan bool
-
-	reduceValues chan [][]byte
-	reduceResult chan [][]byte
 }
 
 func TestMapReduce(t *testing.T) {
@@ -39,55 +28,15 @@ func TestMapReduce(t *testing.T) {
 	defer o.Run(t)
 
 	o.BeforeEach(func(t *testing.T) TMR {
-		mapIndex := make(chan int, 100)
-		reduceIndex := make(chan int, 100)
-
-		mapValues := make(chan []byte, 100)
-		mapResultsKey := make(chan []byte, 100)
-		mapResultsOk := make(chan bool, 100)
-
-		reduceValue := make(chan [][]byte, 100)
-		reduceResult := make(chan [][]byte, 100)
-
 		mockFileSystem := newMockFileSystem()
 		mockNetwork := newMockNetwork()
 		mockFileReader := newMockFileReader()
 
-		chain := mapreduce.Build(mapreduce.MapFunc(func(value []byte) (key []byte, ok bool) {
-			mapIndex <- 0
-			mapValues <- value
-			return <-mapResultsKey, <-mapResultsOk
-		})).Reduce(mapreduce.ReduceFunc(func(value [][]byte) (reduced [][]byte) {
-			reduceIndex <- 1
-			reduceValue <- value
-			return <-reduceResult
-		})).Map(mapreduce.MapFunc(func(value []byte) (key []byte, ok bool) {
-			mapIndex <- 1
-			mapValues <- value
-			return <-mapResultsKey, <-mapResultsOk
-		})).FinalReduce(mapreduce.FinalReduceFunc(func(value [][]byte) (reduced [][]byte) {
-			reduceIndex <- 1
-			reduceValue <- value
-			return <-reduceResult
-		}))
-
-		mr := mapreduce.New(mockFileSystem, mockNetwork, chain)
-
 		return TMR{
 			T:              t,
-			mr:             mr,
 			mockFileSystem: mockFileSystem,
 			mockNetwork:    mockNetwork,
 			mockFileReader: mockFileReader,
-
-			mapIndex:      mapIndex,
-			mapValues:     mapValues,
-			mapResultsKey: mapResultsKey,
-			mapResultsOk:  mapResultsOk,
-
-			reduceIndex:  reduceIndex,
-			reduceValues: reduceValue,
-			reduceResult: reduceResult,
 		}
 	})
 
@@ -100,176 +49,192 @@ func TestMapReduce(t *testing.T) {
 		})
 
 		o.Spec("it uses the correct name in the file system", func(t TMR) {
-			close(t.mapResultsKey)
-			close(t.mapResultsOk)
-			close(t.reduceResult)
-			close(t.mockFileReader.ReadOutput.Ret0)
+			v := make(chan []byte, 100)
+			chain := mapreduce.Build(mapreduce.MapFunc(func(value []byte) (key []byte, ok bool) {
+				v <- value
+				return nil, false
+			})).FinalReduce(mapreduce.FinalReduceFunc(func(value [][]byte) (reduced [][]byte) {
+				return [][]byte{nil}
+			}))
+
+			mr := mapreduce.New(t.mockFileSystem, t.mockNetwork, chain)
+
+			t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data")
+			t.mockFileReader.ReadOutput.Ret1 <- nil
+			t.mockFileReader.ReadOutput.Ret0 <- nil
 			t.mockFileReader.ReadOutput.Ret1 <- io.EOF
 
-			t.mr.Calculate("some-name")
+			mr.Calculate("some-name")
 
 			Expect(t, t.mockFileSystem.ReadFileInput.Name).To(ViaPolling(
 				Chain(Receive(), Equal("some-name")),
 			))
+
+			Expect(t, v).To(ViaPolling(
+				Chain(Receive(), Equal([]byte("some-data"))),
+			))
 		})
 
-		o.Group("when FileReader does not return an error", func() {
-			o.Spec("it passes the data from the reader to the mapper", func(t TMR) {
-				close(t.mapResultsKey)
-				close(t.mapResultsOk)
-				close(t.reduceResult)
-				t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data")
-				t.mockFileReader.ReadOutput.Ret1 <- nil
+		o.Spec("it writes each functions result to the next function", func(t TMR) {
+			r1 := make(chan [][]byte, 100)
+			r2 := make(chan [][]byte, 100)
+			chain := mapreduce.Build(mapreduce.MapFunc(func(value []byte) (key []byte, ok bool) {
+				return []byte("some-key"), true
+			})).Reduce(mapreduce.ReduceFunc(func(value [][]byte) (reduced [][]byte) {
+				r1 <- value
+				return [][]byte{{99}}
+			})).FinalReduce(mapreduce.FinalReduceFunc(func(value [][]byte) (reduced [][]byte) {
+				r2 <- value
+				return [][]byte{nil}
+			}))
 
-				t.mockFileReader.ReadOutput.Ret0 <- nil
-				t.mockFileReader.ReadOutput.Ret1 <- io.EOF
+			mr := mapreduce.New(t.mockFileSystem, t.mockNetwork, chain)
 
-				t.mr.Calculate("some-name")
+			t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data")
+			t.mockFileReader.ReadOutput.Ret1 <- nil
+			t.mockFileReader.ReadOutput.Ret0 <- nil
+			t.mockFileReader.ReadOutput.Ret1 <- io.EOF
 
-				Expect(t, t.mapValues).To(ViaPolling(
-					Chain(Receive(), Equal([]byte("some-data"))),
-				))
-			})
+			mr.Calculate("some-name")
 
-			o.Spec("it writes each functions result to the next function", func(t TMR) {
-				t.mapResultsOk <- true
-				close(t.mapResultsKey)
-				close(t.mapResultsOk)
+			Expect(t, r1).To(ViaPolling(
+				Chain(Receive(), Equal([][]byte{[]byte("some-data")})),
+			))
 
-				t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data")
-				t.mockFileReader.ReadOutput.Ret1 <- nil
-				t.mockFileReader.ReadOutput.Ret0 <- nil
-				t.mockFileReader.ReadOutput.Ret1 <- io.EOF
-				t.reduceResult <- [][]byte{[]byte("some-reduced-data")}
+			Expect(t, r2).To(ViaPolling(
+				Chain(Receive(), Equal([][]byte{{99}})),
+			))
+		})
 
-				t.mr.Calculate("some-name")
+		o.Spec("it does not write filtered out data", func(t TMR) {
+			called := make(chan bool, 100)
+			chain := mapreduce.Build(mapreduce.MapFunc(func(value []byte) (key []byte, ok bool) {
+				return nil, false
+			})).FinalReduce(mapreduce.FinalReduceFunc(func(value [][]byte) (reduced [][]byte) {
+				called <- true
+				return [][]byte{nil}
+			}))
 
-				Expect(t, t.reduceValues).To(ViaPolling(
-					Chain(Receive(), Equal([][]byte{[]byte("some-data")})),
-				))
+			mr := mapreduce.New(t.mockFileSystem, t.mockNetwork, chain)
 
-				Expect(t, t.mapValues).To(ViaPolling(
-					Chain(Receive(), Equal([]byte("some-reduced-data"))),
-				))
-			})
+			t.mockFileReader.ReadOutput.Ret0 <- []byte("some-filtered-data")
+			t.mockFileReader.ReadOutput.Ret1 <- nil
 
-			o.Spec("it does not write filtered out data", func(t TMR) {
-				t.mapResultsOk <- false
-				t.mapResultsOk <- true
-				close(t.mapResultsKey)
-				close(t.mapResultsOk)
+			t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data")
+			t.mockFileReader.ReadOutput.Ret1 <- nil
 
-				t.mockFileReader.ReadOutput.Ret0 <- []byte("some-filtered-data")
-				t.mockFileReader.ReadOutput.Ret1 <- nil
+			t.mockFileReader.ReadOutput.Ret0 <- nil
+			t.mockFileReader.ReadOutput.Ret1 <- io.EOF
 
-				t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data")
-				t.mockFileReader.ReadOutput.Ret1 <- nil
+			mr.Calculate("some-name")
 
-				t.mockFileReader.ReadOutput.Ret0 <- nil
-				t.mockFileReader.ReadOutput.Ret1 <- io.EOF
+			Expect(t, called).To(Always(
+				Not(Receive()),
+			))
+		})
 
-				t.reduceResult <- [][]byte{[]byte("some-reduced-data")}
-
-				t.mr.Calculate("some-name")
-
-				Expect(t, t.reduceValues).To(Always(
-					Not(Chain(Receive(), Equal([]byte("some-filtered-data")))),
-				))
-
-				Expect(t, t.mapValues).To(ViaPolling(
-					Chain(Receive(), Equal([]byte("some-reduced-data"))),
-				))
-			})
-
-			o.Spec("it groups the data via key", func(t TMR) {
-				t.mapResultsKey <- []byte("some-key-a")
-				t.mapResultsKey <- []byte("some-key-b")
-				t.mapResultsKey <- []byte("some-key-a")
-				t.mapResultsOk <- true
-				t.mapResultsOk <- true
-				t.mapResultsOk <- true
-				close(t.mapResultsKey)
-				close(t.mapResultsOk)
-
-				t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-0")
-				t.mockFileReader.ReadOutput.Ret1 <- nil
-				t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-1")
-				t.mockFileReader.ReadOutput.Ret1 <- nil
-				t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-2")
-				t.mockFileReader.ReadOutput.Ret1 <- nil
-				t.mockFileReader.ReadOutput.Ret0 <- nil
-				t.mockFileReader.ReadOutput.Ret1 <- io.EOF
-				t.reduceResult <- [][]byte{[]byte("some-reduced-data")}
-				t.reduceResult <- [][]byte{[]byte("some-reduced-data")}
-				t.reduceResult <- [][]byte{[]byte("some-reduced-data")}
-
-				t.mr.Calculate("some-name")
-
-				Expect(t, t.reduceValues).To(ViaPolling(
-					Chain(Receive(), Equal([][]byte{
-						[]byte("some-data-0"),
-						[]byte("some-data-2"),
-					})),
-				))
-
-				Expect(t, t.reduceValues).To(ViaPolling(
-					Chain(Receive(), Equal([][]byte{
-						[]byte("some-data-1"),
-					})),
-				))
-			})
-
-			o.Spec("it invokes FinalReduce until result is length 1", func(t TMR) {
-				for i := 0; i < 4; i++ {
-					t.mapResultsKey <- []byte("some-key-a")
-					t.mapResultsOk <- true
+		o.Spec("it groups the data via key", func(t TMR) {
+			r := make(chan [][]byte, 100)
+			var called int
+			chain := mapreduce.Build(mapreduce.MapFunc(func(value []byte) (key []byte, ok bool) {
+				called++
+				if called%2 != 0 {
+					return []byte("some-key-a"), true
 				}
-				t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-1")
-				t.mockFileReader.ReadOutput.Ret1 <- nil
-				t.mockFileReader.ReadOutput.Ret0 <- nil
-				t.mockFileReader.ReadOutput.Ret1 <- io.EOF
-				t.reduceResult <- [][]byte{{'a'}, {'b'}, {'c'}}
-				t.reduceResult <- [][]byte{{'a'}, {'b'}}
-				t.reduceResult <- [][]byte{{'a'}}
+				return []byte("some-key-b"), true
+			})).FinalReduce(mapreduce.FinalReduceFunc(func(value [][]byte) (reduced [][]byte) {
+				r <- value
+				return [][]byte{[]byte("some-reduced-data")}
+			}))
 
-				t.mr.Calculate("some-name")
+			mr := mapreduce.New(t.mockFileSystem, t.mockNetwork, chain)
 
-				Expect(t, t.reduceResult).To(ViaPolling(HaveLen(0)))
-			})
+			t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-0")
+			t.mockFileReader.ReadOutput.Ret1 <- nil
+			t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-1")
+			t.mockFileReader.ReadOutput.Ret1 <- nil
+			t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-2")
+			t.mockFileReader.ReadOutput.Ret1 <- nil
+			t.mockFileReader.ReadOutput.Ret0 <- nil
+			t.mockFileReader.ReadOutput.Ret1 <- io.EOF
 
-			o.Spec("it returns a result tree", func(t TMR) {
-				for i := 0; i < 4; i++ {
-					t.mapResultsKey <- []byte("some-key-a")
-					t.mapResultsOk <- true
+			mr.Calculate("some-name")
+			Expect(t, r).To(ViaPolling(HaveLen(2)))
+
+			var results [][][]byte
+			for i := 0; i < 2; i++ {
+				results = append(results, <-r)
+			}
+
+			Expect(t, results).To(Contain([][]byte{
+				[]byte("some-data-0"),
+				[]byte("some-data-2"),
+			}))
+
+			Expect(t, results).To(Contain([][]byte{
+				[]byte("some-data-1"),
+			}))
+		})
+
+		o.Spec("it invokes FinalReduce until result is length 1", func(t TMR) {
+			called := make(chan bool, 100)
+			chain := mapreduce.Build(mapreduce.MapFunc(func(value []byte) (key []byte, ok bool) {
+				return []byte("a"), true
+			})).FinalReduce(mapreduce.FinalReduceFunc(func(value [][]byte) (reduced [][]byte) {
+				called <- true
+				return value[1:]
+			}))
+
+			t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-1")
+			t.mockFileReader.ReadOutput.Ret1 <- nil
+			t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-2")
+			t.mockFileReader.ReadOutput.Ret1 <- nil
+			t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-3")
+			t.mockFileReader.ReadOutput.Ret1 <- nil
+
+			t.mockFileReader.ReadOutput.Ret0 <- nil
+			t.mockFileReader.ReadOutput.Ret1 <- io.EOF
+
+			mr := mapreduce.New(t.mockFileSystem, t.mockNetwork, chain)
+
+			mr.Calculate("some-name")
+
+			Expect(t, called).To(ViaPolling(HaveLen(2)))
+		})
+
+		o.Spec("it returns a result tree", func(t TMR) {
+			var called int
+			chain := mapreduce.Build(mapreduce.MapFunc(func(value []byte) (key []byte, ok bool) {
+				called++
+				if called%2 != 0 {
+					return []byte("some-key-a"), true
 				}
-				t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-1")
-				t.mockFileReader.ReadOutput.Ret1 <- nil
-				t.mockFileReader.ReadOutput.Ret0 <- nil
-				t.mockFileReader.ReadOutput.Ret1 <- io.EOF
-				t.reduceResult <- [][]byte{{'a'}, {'b'}, {'c'}}
-				t.reduceResult <- [][]byte{{'a'}, {'b'}}
-				t.reduceResult <- [][]byte{{'a'}}
+				return []byte("some-key-b"), true
+			})).FinalReduce(mapreduce.FinalReduceFunc(func(value [][]byte) (reduced [][]byte) {
+				return value
+			}))
 
-				results, err := t.mr.Calculate("some-name")
-				Expect(t, err == nil).To(BeTrue())
-				Expect(t, results == nil).To(BeFalse())
+			mr := mapreduce.New(t.mockFileSystem, t.mockNetwork, chain)
 
-				_, isLeaf := results.Leaf()
-				Expect(t, isLeaf).To(BeFalse())
-				Expect(t, results.ChildrenKeys()).To(Contain(
-					[]byte("some-key-a"),
-				))
-				child := results.Child([]byte("some-key-a"))
-				Expect(t, child == nil).To(BeFalse())
-				_, isLeaf = child.Leaf()
-				Expect(t, isLeaf).To(BeFalse())
+			t.mockFileReader.ReadOutput.Ret0 <- []byte("some-data-1")
+			t.mockFileReader.ReadOutput.Ret1 <- nil
+			t.mockFileReader.ReadOutput.Ret0 <- nil
+			t.mockFileReader.ReadOutput.Ret1 <- io.EOF
 
-				child = child.Child([]byte("some-key-a"))
-				Expect(t, child == nil).To(BeFalse())
-				value, isLeaf := child.Leaf()
-				Expect(t, isLeaf).To(BeTrue())
-				Expect(t, string(value)).To(Equal("a"))
-			})
+			results, err := mr.Calculate("some-name")
+			Expect(t, err == nil).To(BeTrue())
+			Expect(t, results == nil).To(BeFalse())
+
+			_, isLeaf := results.Leaf()
+			Expect(t, isLeaf).To(BeFalse())
+			Expect(t, results.ChildrenKeys()).To(Contain(
+				[]byte("some-key-a"),
+			))
+			child := results.Child([]byte("some-key-a"))
+			Expect(t, child == nil).To(BeFalse())
+			value, isLeaf := child.Leaf()
+			Expect(t, isLeaf).To(BeTrue())
+			Expect(t, string(value)).To(Equal("some-data-1"))
 		})
 	})
 
@@ -281,7 +246,14 @@ func TestMapReduce(t *testing.T) {
 		})
 
 		o.Spec("it returns an error", func(t TMR) {
-			_, err := t.mr.Calculate("some-name")
+			chain := mapreduce.Build(mapreduce.MapFunc(func(value []byte) (key []byte, ok bool) {
+				return nil, false
+			})).FinalReduce(mapreduce.FinalReduceFunc(func(value [][]byte) (reduced [][]byte) {
+				return value
+			}))
+			mr := mapreduce.New(t.mockFileSystem, t.mockNetwork, chain)
+
+			_, err := mr.Calculate("some-name")
 			Expect(t, err == nil).To(BeFalse())
 		})
 	})
