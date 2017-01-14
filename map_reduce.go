@@ -1,9 +1,11 @@
 package mapreduce
 
-import "io"
+import (
+	"io"
+	"log"
+)
 
 type FileReader interface {
-	Length() uint64
 	Read() ([]byte, error)
 }
 
@@ -12,8 +14,11 @@ type FileWriter interface {
 }
 
 type FileSystem interface {
+	Nodes(name string) (IDs []string, err error)
+	Length(name string) (length uint64, err error)
+	ReadFile(name string, start, end uint64) (FileReader, error)
+
 	CreateFile(name string) error
-	ReadFile(name string) (FileReader, error)
 	WriteToFile(name string) (FileWriter, error)
 }
 
@@ -40,7 +45,98 @@ func New(fs FileSystem, network Network, funcs Functions) MapReduce {
 }
 
 func (r MapReduce) Calculate(name string) (*Result, error) {
-	reader, err := r.fs.ReadFile(name)
+	length, err := r.fs.Length(name)
+	if err != nil {
+		return nil, err
+	}
+
+	nodes, err := r.fs.Nodes(name)
+	if err != nil {
+		return nil, err
+	}
+
+	segmentLen := length / uint64(len(nodes))
+
+	rc := make(chan *Result, len(nodes))
+	errs := make(chan error, len(nodes))
+	var results []*Result
+	for start := uint64(0); start < length; start += segmentLen {
+		go func(start uint64) {
+			result, err := r.calculate(name, start, start+segmentLen)
+			if err != nil {
+				errs <- err
+			}
+
+			rc <- result
+		}(start)
+	}
+
+	for i := 0; i < len(nodes); i++ {
+		select {
+		case result := <-rc:
+			results = append(results, result)
+		case err := <-errs:
+			return nil, err
+		}
+	}
+
+	return r.combineResults(results), nil
+}
+
+func (r MapReduce) combineResults(results []*Result) *Result {
+	finalResult := newResult()
+	m := make(map[*Result][][]byte)
+	for _, res := range results {
+		r.traverseResult(res, finalResult, m)
+	}
+
+	finalReducer := r.finalReducer()
+	for k, v := range m {
+		for {
+			if len(v) == 1 {
+				k.value = v[0]
+				break
+			}
+			v = finalReducer.FinalReduce(v)
+		}
+	}
+
+	return finalResult
+}
+
+func (r MapReduce) finalReducer() FinalReducer {
+	if len(r.functions) == 0 {
+		log.Fatal("Empty function chain")
+	}
+
+	f := r.functions[len(r.functions)-1].finalReducer
+
+	if f == nil {
+		log.Fatal("Final function in chain is not a FinalReducer")
+	}
+	return f
+}
+
+func (r MapReduce) traverseResult(result, finalResult *Result, m map[*Result][][]byte) {
+	if result == nil {
+		return
+	}
+
+	for _, k := range result.ChildrenKeys() {
+		child := finalResult.addChild(k)
+		r.traverseResult(result.Child(k), child, m)
+	}
+
+	value, leaf := result.Leaf()
+	if !leaf {
+		return
+	}
+
+	m[finalResult] = append(m[finalResult], value)
+}
+
+func (r MapReduce) calculate(name string, start, end uint64) (*Result, error) {
+	reader, err := r.fs.ReadFile(name, start, end)
 	if err != nil {
 		return nil, err
 	}

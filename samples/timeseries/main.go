@@ -1,10 +1,11 @@
 package main
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log"
+	"sort"
+	"strconv"
 	"time"
 
 	"github.com/apoydence/mapreduce"
@@ -18,7 +19,7 @@ type Point struct {
 }
 
 func main() {
-	fs := components.NewInMemoryFS()
+	fs := components.NewInMemoryFS(100)
 	populateFile("some-name", fs)
 
 	chain := mapreduce.Build(mapreduce.MapFunc(func(data []byte) (key []byte, ok bool) {
@@ -29,10 +30,8 @@ func main() {
 		}
 
 		t := time.Unix(0, pt.Time).Truncate(time.Second).Unix()
-		b := make([]byte, 8)
-		binary.LittleEndian.PutUint64(b, uint64(t))
+		return []byte(fmt.Sprintf("%d", t)), true
 
-		return b, true
 	})).FinalReduce(mapreduce.FinalReduceFunc(func(data [][]byte) [][]byte {
 		var maxPt Point
 		for _, d := range data {
@@ -49,6 +48,13 @@ func main() {
 			if pt.Y > maxPt.Y {
 				maxPt.Y = pt.Y
 			}
+
+			t := time.Unix(0, pt.Time).Truncate(time.Second).Unix()
+			if maxPt.Time != 0 && maxPt.Time != t {
+				log.Panicf("ADS %d %d", maxPt.Time, t)
+			}
+
+			maxPt.Time = t
 		}
 
 		results, _ := json.Marshal(maxPt)
@@ -57,11 +63,14 @@ func main() {
 
 	mapReduce := mapreduce.New(fs, nil, chain)
 
+	start := time.Now()
 	results, err := mapReduce.Calculate("some-name")
 	if err != nil {
 		log.Fatalf("Failed to calculate: %s", err)
 	}
+	duration := time.Since(start)
 
+	var pts []Point
 	for _, key := range results.ChildrenKeys() {
 		child := results.Child(key)
 		value, _ := child.Leaf()
@@ -70,11 +79,23 @@ func main() {
 		if err := json.Unmarshal(value, &pt); err != nil {
 			log.Fatalf("unable to unmarshal: %s", err)
 		}
-		t := binary.LittleEndian.Uint64(key)
+
+		t, err := strconv.ParseUint(string(key), 10, 64)
+		if err != nil {
+			log.Fatalf("Failed to parse time %s: %s", string(key), err)
+		}
+
 		pt.Time = int64(t)
 
-		fmt.Printf("%d -> %#v\n", t, pt)
+		pts = append(pts, pt)
 	}
+
+	sort.Sort(points(pts))
+
+	for _, pt := range pts {
+		fmt.Printf("%d -> %#v\n", pt.Time, pt)
+	}
+	fmt.Printf("calculation took %s\n", duration)
 }
 
 func populateFile(name string, fs mapreduce.FileSystem) {
@@ -87,9 +108,9 @@ func populateFile(name string, fs mapreduce.FileSystem) {
 		log.Fatalf("Failed to fetch writer for %s: %s", name, err)
 	}
 
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 1000000; i++ {
 		pt := Point{
-			Time: time.Now().Add(10 * time.Duration(i) * time.Millisecond).UnixNano(),
+			Time: time.Now().Truncate(time.Second).Add(1 * time.Duration(i) * time.Millisecond).UnixNano(),
 			X:    float64(i) * 50,
 			Y:    float64(i) * 20,
 		}
@@ -99,4 +120,20 @@ func populateFile(name string, fs mapreduce.FileSystem) {
 			log.Fatalf("Failed to write to %s: %s", name, err)
 		}
 	}
+}
+
+type points []Point
+
+func (p points) Len() int {
+	return len(p)
+}
+
+func (p points) Less(i, j int) bool {
+	return p[i].Time < p[j].Time
+}
+
+func (p points) Swap(i, j int) {
+	tmp := p[i]
+	p[i] = p[j]
+	p[j] = tmp
 }

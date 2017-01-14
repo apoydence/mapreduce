@@ -33,6 +33,10 @@ func (r *Result) Child(key []byte) (child *Result) {
 }
 
 func (r *Result) addChild(key []byte) (child *Result) {
+	if child, ok := r.children[string(key)]; ok {
+		return child
+	}
+
 	child = newResult()
 	child.Key = key
 	r.children[string(key)] = child

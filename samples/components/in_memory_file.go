@@ -8,11 +8,14 @@ import (
 type inMemoryFile struct {
 	mu   sync.Mutex
 	data [][]byte
-	idx  int
 }
 
 func newInMemoryFile() *inMemoryFile {
 	return &inMemoryFile{}
+}
+
+func (f *inMemoryFile) Reader(start, end uint64) *inMemoryFileReader {
+	return &inMemoryFileReader{file: f, idx: start, end: end}
 }
 
 func (f *inMemoryFile) Length() uint64 {
@@ -21,24 +24,30 @@ func (f *inMemoryFile) Length() uint64 {
 	return uint64(len(f.data))
 }
 
-func (f *inMemoryFile) Read() ([]byte, error) {
-	f.mu.Lock()
-	defer func() {
-		f.idx++
-		f.mu.Unlock()
-	}()
-
-	if f.idx >= len(f.data) {
-		return nil, io.EOF
-	}
-
-	return f.data[f.idx], nil
-}
-
 func (f *inMemoryFile) Write(data []byte) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.data = append(f.data, data)
 
 	return nil
+}
+
+type inMemoryFileReader struct {
+	file *inMemoryFile
+	idx  uint64
+	end  uint64
+}
+
+func (r *inMemoryFileReader) Read() ([]byte, error) {
+	r.file.mu.Lock()
+	defer func() {
+		r.idx++
+		r.file.mu.Unlock()
+	}()
+
+	if r.idx >= r.end || r.idx >= uint64(len(r.file.data)) {
+		return nil, io.EOF
+	}
+
+	return r.file.data[r.idx], nil
 }
