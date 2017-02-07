@@ -9,17 +9,10 @@ type FileReader interface {
 	Read() ([]byte, error)
 }
 
-type FileWriter interface {
-	Write(data []byte) error
-}
-
 type FileSystem interface {
 	Nodes(name string) (IDs []string, err error)
 	Length(name string) (length uint64, err error)
 	ReadFile(name string, start, end uint64) (FileReader, error)
-
-	CreateFile(name string) error
-	WriteToFile(name string) (FileWriter, error)
 }
 
 type Network interface {

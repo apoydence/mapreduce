@@ -80,29 +80,6 @@ func (m *mockFileReader) Read() ([]byte, error) {
 	return <-m.ReadOutput.Ret0, <-m.ReadOutput.Ret1
 }
 
-type mockFileWriter struct {
-	WriteCalled chan bool
-	WriteInput  struct {
-		Data chan []byte
-	}
-	WriteOutput struct {
-		Ret0 chan error
-	}
-}
-
-func newMockFileWriter() *mockFileWriter {
-	m := &mockFileWriter{}
-	m.WriteCalled = make(chan bool, 100)
-	m.WriteInput.Data = make(chan []byte, 100)
-	m.WriteOutput.Ret0 = make(chan error, 100)
-	return m
-}
-func (m *mockFileWriter) Write(data []byte) error {
-	m.WriteCalled <- true
-	m.WriteInput.Data <- data
-	return <-m.WriteOutput.Ret0
-}
-
 type mockFileSystem struct {
 	NodesCalled chan bool
 	NodesInput  struct {
@@ -129,21 +106,6 @@ type mockFileSystem struct {
 		Ret0 chan mapreduce.FileReader
 		Ret1 chan error
 	}
-	CreateFileCalled chan bool
-	CreateFileInput  struct {
-		Name chan string
-	}
-	CreateFileOutput struct {
-		Ret0 chan error
-	}
-	WriteToFileCalled chan bool
-	WriteToFileInput  struct {
-		Name chan string
-	}
-	WriteToFileOutput struct {
-		Ret0 chan mapreduce.FileWriter
-		Ret1 chan error
-	}
 }
 
 func newMockFileSystem() *mockFileSystem {
@@ -162,13 +124,6 @@ func newMockFileSystem() *mockFileSystem {
 	m.ReadFileInput.End = make(chan uint64, 100)
 	m.ReadFileOutput.Ret0 = make(chan mapreduce.FileReader, 100)
 	m.ReadFileOutput.Ret1 = make(chan error, 100)
-	m.CreateFileCalled = make(chan bool, 100)
-	m.CreateFileInput.Name = make(chan string, 100)
-	m.CreateFileOutput.Ret0 = make(chan error, 100)
-	m.WriteToFileCalled = make(chan bool, 100)
-	m.WriteToFileInput.Name = make(chan string, 100)
-	m.WriteToFileOutput.Ret0 = make(chan mapreduce.FileWriter, 100)
-	m.WriteToFileOutput.Ret1 = make(chan error, 100)
 	return m
 }
 func (m *mockFileSystem) Nodes(name string) (IDs []string, err error) {
@@ -187,16 +142,6 @@ func (m *mockFileSystem) ReadFile(name string, start, end uint64) (mapreduce.Fil
 	m.ReadFileInput.Start <- start
 	m.ReadFileInput.End <- end
 	return <-m.ReadFileOutput.Ret0, <-m.ReadFileOutput.Ret1
-}
-func (m *mockFileSystem) CreateFile(name string) error {
-	m.CreateFileCalled <- true
-	m.CreateFileInput.Name <- name
-	return <-m.CreateFileOutput.Ret0
-}
-func (m *mockFileSystem) WriteToFile(name string) (mapreduce.FileWriter, error) {
-	m.WriteToFileCalled <- true
-	m.WriteToFileInput.Name <- name
-	return <-m.WriteToFileOutput.Ret0, <-m.WriteToFileOutput.Ret1
 }
 
 type mockNetwork struct {
