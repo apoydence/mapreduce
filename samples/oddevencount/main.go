@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	fileSystem := components.NewInMemoryFS()
+	fileSystem := components.NewInMemoryFS(3)
 	populateFile("some-name", fileSystem)
 
 	chain := mapreduce.Build(mapreduce.MapFunc(func(data []byte) (key []byte, ok bool) {
