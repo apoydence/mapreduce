@@ -36,7 +36,7 @@ func (r MapReduce) Calculate(route, algName string, ctx context.Context) (finalR
 	for fileName, ids := range files {
 		// TODO: Balance load across nodes
 		id := ids[rand.Intn(len(ids))]
-		result, err := r.network.ExecuteChain(fileName, algName, id, ctx)
+		result, err := r.network.Execute(fileName, algName, id, ctx)
 		if err != nil {
 			return nil, err
 		}

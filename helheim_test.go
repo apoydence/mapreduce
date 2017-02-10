@@ -127,12 +127,12 @@ func (m *mockMapper) Map(value []byte) (key string, output []byte, err error) {
 }
 
 type mockNetwork struct {
-	ExecuteChainCalled chan bool
-	ExecuteChainInput  struct {
+	ExecuteCalled chan bool
+	ExecuteInput  struct {
 		File, AlgName, NodeID chan string
 		Ctx                   chan context.Context
 	}
-	ExecuteChainOutput struct {
+	ExecuteOutput struct {
 		Result chan map[string][]byte
 		Err    chan error
 	}
@@ -140,22 +140,22 @@ type mockNetwork struct {
 
 func newMockNetwork() *mockNetwork {
 	m := &mockNetwork{}
-	m.ExecuteChainCalled = make(chan bool, 100)
-	m.ExecuteChainInput.File = make(chan string, 100)
-	m.ExecuteChainInput.AlgName = make(chan string, 100)
-	m.ExecuteChainInput.NodeID = make(chan string, 100)
-	m.ExecuteChainInput.Ctx = make(chan context.Context, 100)
-	m.ExecuteChainOutput.Result = make(chan map[string][]byte, 100)
-	m.ExecuteChainOutput.Err = make(chan error, 100)
+	m.ExecuteCalled = make(chan bool, 100)
+	m.ExecuteInput.File = make(chan string, 100)
+	m.ExecuteInput.AlgName = make(chan string, 100)
+	m.ExecuteInput.NodeID = make(chan string, 100)
+	m.ExecuteInput.Ctx = make(chan context.Context, 100)
+	m.ExecuteOutput.Result = make(chan map[string][]byte, 100)
+	m.ExecuteOutput.Err = make(chan error, 100)
 	return m
 }
-func (m *mockNetwork) ExecuteChain(file, algName, nodeID string, ctx context.Context) (result map[string][]byte, err error) {
-	m.ExecuteChainCalled <- true
-	m.ExecuteChainInput.File <- file
-	m.ExecuteChainInput.AlgName <- algName
-	m.ExecuteChainInput.NodeID <- nodeID
-	m.ExecuteChainInput.Ctx <- ctx
-	return <-m.ExecuteChainOutput.Result, <-m.ExecuteChainOutput.Err
+func (m *mockNetwork) Execute(file, algName, nodeID string, ctx context.Context) (result map[string][]byte, err error) {
+	m.ExecuteCalled <- true
+	m.ExecuteInput.File <- file
+	m.ExecuteInput.AlgName <- algName
+	m.ExecuteInput.NodeID <- nodeID
+	m.ExecuteInput.Ctx <- ctx
+	return <-m.ExecuteOutput.Result, <-m.ExecuteOutput.Err
 }
 
 type mockReducer struct {

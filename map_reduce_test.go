@@ -73,7 +73,7 @@ func TestMapReduce(t *testing.T) {
 
 		o.Group("when the Network does not return an error", func() {
 			o.BeforeEach(func(t TMR) TMR {
-				close(t.mockNetwork.ExecuteChainOutput.Err)
+				close(t.mockNetwork.ExecuteOutput.Err)
 				return t
 			})
 
@@ -81,7 +81,7 @@ func TestMapReduce(t *testing.T) {
 				o.BeforeEach(func(t TMR) TMR {
 					go func() {
 						for i := 0; i < 100; i++ {
-							t.mockNetwork.ExecuteChainOutput.Result <- map[string][]byte{
+							t.mockNetwork.ExecuteOutput.Result <- map[string][]byte{
 								fmt.Sprintf("key-%d", i): []byte(fmt.Sprintf("some-value-%d", i)),
 							}
 						}
@@ -97,14 +97,14 @@ func TestMapReduce(t *testing.T) {
 				o.Spec("it uses the correct chain name", func(t TMR) {
 					t.mr.Calculate("some-file", "some-alg", context.Background())
 
-					s := toSlice(t.mockNetwork.ExecuteChainInput.AlgName, 2)
+					s := toSlice(t.mockNetwork.ExecuteInput.AlgName, 2)
 					Expect(t, s).To(Equal([]string{"some-alg", "some-alg"}))
 				})
 
 				o.Spec("it executes each file on a corresponding node", func(t TMR) {
 					t.mr.Calculate("some-file", "some-alg", context.Background())
 
-					m := toMap(t.mockNetwork.ExecuteChainInput.File, t.mockNetwork.ExecuteChainInput.NodeID, 2)
+					m := toMap(t.mockNetwork.ExecuteInput.File, t.mockNetwork.ExecuteInput.NodeID, 2)
 					Expect(t, m).To(HaveLen(2))
 
 					id, ok := m["some-name-a"]
@@ -135,7 +135,7 @@ func TestMapReduce(t *testing.T) {
 				o.BeforeEach(func(t TMR) TMR {
 					go func() {
 						for i := 0; i < 100; i++ {
-							t.mockNetwork.ExecuteChainOutput.Result <- map[string][]byte{
+							t.mockNetwork.ExecuteOutput.Result <- map[string][]byte{
 								"same-key": []byte("some-value"),
 							}
 						}
@@ -202,8 +202,8 @@ func TestMapReduce(t *testing.T) {
 
 		o.Group("when the Network returns an error", func() {
 			o.BeforeEach(func(t TMR) TMR {
-				testhelpers.AlwaysReturn(t.mockNetwork.ExecuteChainOutput.Err, fmt.Errorf("some-error"))
-				close(t.mockNetwork.ExecuteChainOutput.Result)
+				testhelpers.AlwaysReturn(t.mockNetwork.ExecuteOutput.Err, fmt.Errorf("some-error"))
+				close(t.mockNetwork.ExecuteOutput.Result)
 				return t
 			})
 
