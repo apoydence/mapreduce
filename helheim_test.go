@@ -5,169 +5,98 @@
 
 package mapreduce_test
 
-import "github.com/apoydence/mapreduce"
+import "golang.org/x/net/context"
 
-type mockChainLink struct {
+type mockAlgorithm struct {
 	MapCalled chan bool
 	MapInput  struct {
-		M chan mapreduce.Mapper
+		Value chan []byte
 	}
 	MapOutput struct {
-		Ret0 chan mapreduce.ChainLink
+		Key    chan string
+		Output chan []byte
+		Err    chan error
 	}
 	ReduceCalled chan bool
 	ReduceInput  struct {
-		R chan mapreduce.Reducer
+		Value chan [][]byte
 	}
 	ReduceOutput struct {
-		Ret0 chan mapreduce.ChainLink
-	}
-	FinalReduceCalled chan bool
-	FinalReduceInput  struct {
-		R chan mapreduce.FinalReducer
-	}
-	FinalReduceOutput struct {
-		Ret0 chan mapreduce.Functions
+		Reduced chan [][]byte
+		Err     chan error
 	}
 }
 
-func newMockChainLink() *mockChainLink {
-	m := &mockChainLink{}
+func newMockAlgorithm() *mockAlgorithm {
+	m := &mockAlgorithm{}
 	m.MapCalled = make(chan bool, 100)
-	m.MapInput.M = make(chan mapreduce.Mapper, 100)
-	m.MapOutput.Ret0 = make(chan mapreduce.ChainLink, 100)
+	m.MapInput.Value = make(chan []byte, 100)
+	m.MapOutput.Key = make(chan string, 100)
+	m.MapOutput.Output = make(chan []byte, 100)
+	m.MapOutput.Err = make(chan error, 100)
 	m.ReduceCalled = make(chan bool, 100)
-	m.ReduceInput.R = make(chan mapreduce.Reducer, 100)
-	m.ReduceOutput.Ret0 = make(chan mapreduce.ChainLink, 100)
-	m.FinalReduceCalled = make(chan bool, 100)
-	m.FinalReduceInput.R = make(chan mapreduce.FinalReducer, 100)
-	m.FinalReduceOutput.Ret0 = make(chan mapreduce.Functions, 100)
+	m.ReduceInput.Value = make(chan [][]byte, 100)
+	m.ReduceOutput.Reduced = make(chan [][]byte, 100)
+	m.ReduceOutput.Err = make(chan error, 100)
 	return m
 }
-func (m *mockChainLink) Map(m_ mapreduce.Mapper) mapreduce.ChainLink {
+func (m *mockAlgorithm) Map(value []byte) (key string, output []byte, err error) {
 	m.MapCalled <- true
-	m.MapInput.M <- m_
-	return <-m.MapOutput.Ret0
+	m.MapInput.Value <- value
+	return <-m.MapOutput.Key, <-m.MapOutput.Output, <-m.MapOutput.Err
 }
-func (m *mockChainLink) Reduce(r mapreduce.Reducer) mapreduce.ChainLink {
+func (m *mockAlgorithm) Reduce(value [][]byte) (reduced [][]byte, err error) {
 	m.ReduceCalled <- true
-	m.ReduceInput.R <- r
-	return <-m.ReduceOutput.Ret0
-}
-func (m *mockChainLink) FinalReduce(r mapreduce.FinalReducer) mapreduce.Functions {
-	m.FinalReduceCalled <- true
-	m.FinalReduceInput.R <- r
-	return <-m.FinalReduceOutput.Ret0
-}
-
-type mockFileReader struct {
-	ReadCalled chan bool
-	ReadOutput struct {
-		Ret0 chan []byte
-		Ret1 chan error
-	}
-}
-
-func newMockFileReader() *mockFileReader {
-	m := &mockFileReader{}
-	m.ReadCalled = make(chan bool, 100)
-	m.ReadOutput.Ret0 = make(chan []byte, 100)
-	m.ReadOutput.Ret1 = make(chan error, 100)
-	return m
-}
-func (m *mockFileReader) Read() ([]byte, error) {
-	m.ReadCalled <- true
-	return <-m.ReadOutput.Ret0, <-m.ReadOutput.Ret1
+	m.ReduceInput.Value <- value
+	return <-m.ReduceOutput.Reduced, <-m.ReduceOutput.Err
 }
 
 type mockFileSystem struct {
-	NodesCalled chan bool
-	NodesInput  struct {
-		Name chan string
+	FilesCalled chan bool
+	FilesInput  struct {
+		Route chan string
+		Ctx   chan context.Context
 	}
-	NodesOutput struct {
-		IDs chan []string
-		Err chan error
+	FilesOutput struct {
+		Files chan map[string][]string
+		Err   chan error
 	}
-	LengthCalled chan bool
-	LengthInput  struct {
-		Name chan string
+	ReaderCalled chan bool
+	ReaderInput  struct {
+		File chan string
+		Ctx  chan context.Context
 	}
-	LengthOutput struct {
-		Length chan uint64
+	ReaderOutput struct {
+		Reader chan func() (data []byte, err error)
 		Err    chan error
-	}
-	ReadFileCalled chan bool
-	ReadFileInput  struct {
-		Name       chan string
-		Start, End chan uint64
-	}
-	ReadFileOutput struct {
-		Ret0 chan mapreduce.FileReader
-		Ret1 chan error
 	}
 }
 
 func newMockFileSystem() *mockFileSystem {
 	m := &mockFileSystem{}
-	m.NodesCalled = make(chan bool, 100)
-	m.NodesInput.Name = make(chan string, 100)
-	m.NodesOutput.IDs = make(chan []string, 100)
-	m.NodesOutput.Err = make(chan error, 100)
-	m.LengthCalled = make(chan bool, 100)
-	m.LengthInput.Name = make(chan string, 100)
-	m.LengthOutput.Length = make(chan uint64, 100)
-	m.LengthOutput.Err = make(chan error, 100)
-	m.ReadFileCalled = make(chan bool, 100)
-	m.ReadFileInput.Name = make(chan string, 100)
-	m.ReadFileInput.Start = make(chan uint64, 100)
-	m.ReadFileInput.End = make(chan uint64, 100)
-	m.ReadFileOutput.Ret0 = make(chan mapreduce.FileReader, 100)
-	m.ReadFileOutput.Ret1 = make(chan error, 100)
+	m.FilesCalled = make(chan bool, 100)
+	m.FilesInput.Route = make(chan string, 100)
+	m.FilesInput.Ctx = make(chan context.Context, 100)
+	m.FilesOutput.Files = make(chan map[string][]string, 100)
+	m.FilesOutput.Err = make(chan error, 100)
+	m.ReaderCalled = make(chan bool, 100)
+	m.ReaderInput.File = make(chan string, 100)
+	m.ReaderInput.Ctx = make(chan context.Context, 100)
+	m.ReaderOutput.Reader = make(chan func() (data []byte, err error), 100)
+	m.ReaderOutput.Err = make(chan error, 100)
 	return m
 }
-func (m *mockFileSystem) Nodes(name string) (IDs []string, err error) {
-	m.NodesCalled <- true
-	m.NodesInput.Name <- name
-	return <-m.NodesOutput.IDs, <-m.NodesOutput.Err
+func (m *mockFileSystem) Files(route string, ctx context.Context) (files map[string][]string, err error) {
+	m.FilesCalled <- true
+	m.FilesInput.Route <- route
+	m.FilesInput.Ctx <- ctx
+	return <-m.FilesOutput.Files, <-m.FilesOutput.Err
 }
-func (m *mockFileSystem) Length(name string) (length uint64, err error) {
-	m.LengthCalled <- true
-	m.LengthInput.Name <- name
-	return <-m.LengthOutput.Length, <-m.LengthOutput.Err
-}
-func (m *mockFileSystem) ReadFile(name string, start, end uint64) (mapreduce.FileReader, error) {
-	m.ReadFileCalled <- true
-	m.ReadFileInput.Name <- name
-	m.ReadFileInput.Start <- start
-	m.ReadFileInput.End <- end
-	return <-m.ReadFileOutput.Ret0, <-m.ReadFileOutput.Ret1
-}
-
-type mockNetwork struct {
-}
-
-func newMockNetwork() *mockNetwork {
-	m := &mockNetwork{}
-	return m
-}
-
-type mockFunctions struct {
-	FunctionsCalled chan bool
-	FunctionsOutput struct {
-		Ret0 chan []mapreduce.Function
-	}
-}
-
-func newMockFunctions() *mockFunctions {
-	m := &mockFunctions{}
-	m.FunctionsCalled = make(chan bool, 100)
-	m.FunctionsOutput.Ret0 = make(chan []mapreduce.Function, 100)
-	return m
-}
-func (m *mockFunctions) Functions() []mapreduce.Function {
-	m.FunctionsCalled <- true
-	return <-m.FunctionsOutput.Ret0
+func (m *mockFileSystem) Reader(file string, ctx context.Context) (reader func() (data []byte, err error), err error) {
+	m.ReaderCalled <- true
+	m.ReaderInput.File <- file
+	m.ReaderInput.Ctx <- ctx
+	return <-m.ReaderOutput.Reader, <-m.ReaderOutput.Err
 }
 
 type mockMapper struct {
@@ -176,8 +105,9 @@ type mockMapper struct {
 		Value chan []byte
 	}
 	MapOutput struct {
-		Key chan []byte
-		Ok  chan bool
+		Key    chan string
+		Output chan []byte
+		Err    chan error
 	}
 }
 
@@ -185,14 +115,47 @@ func newMockMapper() *mockMapper {
 	m := &mockMapper{}
 	m.MapCalled = make(chan bool, 100)
 	m.MapInput.Value = make(chan []byte, 100)
-	m.MapOutput.Key = make(chan []byte, 100)
-	m.MapOutput.Ok = make(chan bool, 100)
+	m.MapOutput.Key = make(chan string, 100)
+	m.MapOutput.Output = make(chan []byte, 100)
+	m.MapOutput.Err = make(chan error, 100)
 	return m
 }
-func (m *mockMapper) Map(value []byte) (key []byte, ok bool) {
+func (m *mockMapper) Map(value []byte) (key string, output []byte, err error) {
 	m.MapCalled <- true
 	m.MapInput.Value <- value
-	return <-m.MapOutput.Key, <-m.MapOutput.Ok
+	return <-m.MapOutput.Key, <-m.MapOutput.Output, <-m.MapOutput.Err
+}
+
+type mockNetwork struct {
+	ExecuteChainCalled chan bool
+	ExecuteChainInput  struct {
+		File, AlgName, NodeID chan string
+		Ctx                   chan context.Context
+	}
+	ExecuteChainOutput struct {
+		Result chan map[string][]byte
+		Err    chan error
+	}
+}
+
+func newMockNetwork() *mockNetwork {
+	m := &mockNetwork{}
+	m.ExecuteChainCalled = make(chan bool, 100)
+	m.ExecuteChainInput.File = make(chan string, 100)
+	m.ExecuteChainInput.AlgName = make(chan string, 100)
+	m.ExecuteChainInput.NodeID = make(chan string, 100)
+	m.ExecuteChainInput.Ctx = make(chan context.Context, 100)
+	m.ExecuteChainOutput.Result = make(chan map[string][]byte, 100)
+	m.ExecuteChainOutput.Err = make(chan error, 100)
+	return m
+}
+func (m *mockNetwork) ExecuteChain(file, algName, nodeID string, ctx context.Context) (result map[string][]byte, err error) {
+	m.ExecuteChainCalled <- true
+	m.ExecuteChainInput.File <- file
+	m.ExecuteChainInput.AlgName <- algName
+	m.ExecuteChainInput.NodeID <- nodeID
+	m.ExecuteChainInput.Ctx <- ctx
+	return <-m.ExecuteChainOutput.Result, <-m.ExecuteChainOutput.Err
 }
 
 type mockReducer struct {
@@ -202,6 +165,7 @@ type mockReducer struct {
 	}
 	ReduceOutput struct {
 		Reduced chan [][]byte
+		Err     chan error
 	}
 }
 
@@ -210,33 +174,11 @@ func newMockReducer() *mockReducer {
 	m.ReduceCalled = make(chan bool, 100)
 	m.ReduceInput.Value = make(chan [][]byte, 100)
 	m.ReduceOutput.Reduced = make(chan [][]byte, 100)
+	m.ReduceOutput.Err = make(chan error, 100)
 	return m
 }
-func (m *mockReducer) Reduce(value [][]byte) (reduced [][]byte) {
+func (m *mockReducer) Reduce(value [][]byte) (reduced [][]byte, err error) {
 	m.ReduceCalled <- true
 	m.ReduceInput.Value <- value
-	return <-m.ReduceOutput.Reduced
-}
-
-type mockFinalReducer struct {
-	FinalReduceCalled chan bool
-	FinalReduceInput  struct {
-		Value chan [][]byte
-	}
-	FinalReduceOutput struct {
-		Reduced chan [][]byte
-	}
-}
-
-func newMockFinalReducer() *mockFinalReducer {
-	m := &mockFinalReducer{}
-	m.FinalReduceCalled = make(chan bool, 100)
-	m.FinalReduceInput.Value = make(chan [][]byte, 100)
-	m.FinalReduceOutput.Reduced = make(chan [][]byte, 100)
-	return m
-}
-func (m *mockFinalReducer) FinalReduce(value [][]byte) (reduced [][]byte) {
-	m.FinalReduceCalled <- true
-	m.FinalReduceInput.Value <- value
-	return <-m.FinalReduceOutput.Reduced
+	return <-m.ReduceOutput.Reduced, <-m.ReduceOutput.Err
 }

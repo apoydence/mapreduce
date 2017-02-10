@@ -1,71 +1,60 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"log"
+	"math/rand"
+	"time"
 
 	"github.com/apoydence/mapreduce"
 	"github.com/apoydence/mapreduce/samples/components"
 )
 
 func main() {
-	fileSystem := components.NewInMemoryFS(3)
-	populateFile("some-name", fileSystem)
+	rand.Seed(time.Now().UnixNano())
+	algs := map[string]mapreduce.Algorithm{
+		"oddeven": {
+			Mapper: mapreduce.MapFunc(func(data []byte) (key string, output []byte, err error) {
+				i := binary.LittleEndian.Uint32(data)
+				one := make([]byte, 8)
+				binary.LittleEndian.PutUint64(one, 1)
+				if i%2 == 0 {
+					return "even", one, nil
+				}
 
-	chain := mapreduce.Build(mapreduce.MapFunc(func(data []byte) (key []byte, ok bool) {
-		i := binary.LittleEndian.Uint32(data)
-		if i%2 == 0 {
-			return []byte("even"), true
-		}
+				return "odd", one, nil
 
-		return []byte("odd"), true
-	})).Reduce(mapreduce.ReduceFunc(func(data [][]byte) [][]byte {
-		b := make([]byte, 4)
-		binary.LittleEndian.PutUint32(b, uint32(len(data)))
-		return [][]byte{b}
-	})).FinalReduce(mapreduce.FinalReduceFunc(func(data [][]byte) [][]byte {
-		// Sum
-		var sum uint32
-		for _, d := range data {
-			sum += binary.LittleEndian.Uint32(d)
-		}
+			}),
+			Reducer: mapreduce.ReduceFunc(func(data [][]byte) ([][]byte, error) {
+				// Sum
+				var sum uint32
+				for _, d := range data {
+					sum += binary.LittleEndian.Uint32(d)
+				}
 
-		b := make([]byte, 4)
-		binary.LittleEndian.PutUint32(b, sum)
-		return [][]byte{b}
-	}))
+				b := make([]byte, 4)
+				binary.LittleEndian.PutUint32(b, sum)
+				return [][]byte{b}, nil
+			}),
+		},
+	}
 
-	mapReduce := mapreduce.New(fileSystem, nil, chain)
+	size := rand.Intn(100000)
+	println(size)
+	fileSystem := components.NewInMemoryFS(3, size)
+	executor := mapreduce.NewExecutor(algs, fileSystem)
+	network := components.NewInProcessNetwork(executor)
 
-	results, err := mapReduce.Calculate("some-name")
+	mapReduce := mapreduce.New(fileSystem, network, algs)
+
+	results, err := mapReduce.Calculate("some-name", "oddeven", context.Background())
 	if err != nil {
 		log.Fatalf("Failed to calculate: %s", err)
 	}
 
-	for _, key := range results.ChildrenKeys() {
-		child := results.Child(key)
-		value, _ := child.Leaf()
-
-		fmt.Println(string(key), "->", binary.LittleEndian.Uint32(value))
-	}
-}
-
-func populateFile(name string, fs mapreduce.FileSystem) {
-	if err := fs.CreateFile(name); err != nil {
-		log.Fatalf("Failed to create file %s: %s", name, err)
-	}
-
-	writer, err := fs.WriteToFile(name)
-	if err != nil {
-		log.Fatalf("Failed to fetch writer for %s: %s", name, err)
-	}
-
-	for i := 0; i < 1000; i++ {
-		b := make([]byte, 4)
-		binary.LittleEndian.PutUint32(b, uint32(i))
-		if err := writer.Write(b); err != nil {
-			log.Fatalf("Failed to write to %s: %s", name, err)
-		}
+	for key, data := range results {
+		fmt.Println(key, "->", binary.LittleEndian.Uint32(data))
 	}
 }
