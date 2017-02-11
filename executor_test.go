@@ -20,7 +20,7 @@ type TE struct {
 	mockFileSystem *mockFileSystem
 	mockReducer    *mockReducer
 	mockMapper     *mockMapper
-	algs           map[string]mapreduce.Algorithm
+	mockAlgFetcher *mockAlgorithmFetcher
 }
 
 func TestExecutor(t *testing.T) {
@@ -32,17 +32,17 @@ func TestExecutor(t *testing.T) {
 		mockReducer := newMockReducer()
 		mockMapper := newMockMapper()
 		mockFileSystem := newMockFileSystem()
+		mockAlgFetcher := newMockAlgorithmFetcher()
 
-		algs := map[string]mapreduce.Algorithm{
-			"a": mapreduce.Algorithm{Mapper: mockMapper, Reducer: mockReducer},
-		}
+		mockAlgFetcher.AlgOutput.Alg <- mapreduce.Algorithm{Mapper: mockMapper, Reducer: mockReducer}
+		close(mockAlgFetcher.AlgOutput.Err)
 
 		return TE{
 			T:              t,
 			mockMapper:     mockMapper,
 			mockReducer:    mockReducer,
 			mockFileSystem: mockFileSystem,
-			e:              mapreduce.NewExecutor(algs, mockFileSystem),
+			e:              mapreduce.NewExecutor(mockAlgFetcher, mockFileSystem),
 		}
 	})
 

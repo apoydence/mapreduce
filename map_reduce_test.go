@@ -34,6 +34,7 @@ type TMR struct {
 	mockFileSystem *mockFileSystem
 	mockNetwork    *mockNetwork
 	mockAlgorithm  *mockReducer
+	mockAlgFetcher *mockAlgorithmFetcher
 
 	mr mapreduce.MapReduce
 }
@@ -47,17 +48,18 @@ func TestMapReduce(t *testing.T) {
 		mockFileSystem := newMockFileSystem()
 		mockNetwork := newMockNetwork()
 		mockReducer := newMockReducer()
+		mockAlgFetcher := newMockAlgorithmFetcher()
 
-		algorithms := map[string]mapreduce.Algorithm{
-			"some-alg": {Reducer: mockReducer},
-		}
+		mockAlgFetcher.AlgOutput.Alg <- mapreduce.Algorithm{Reducer: mockReducer}
+		close(mockAlgFetcher.AlgOutput.Err)
 
 		return TMR{
 			T:              t,
 			mockNetwork:    mockNetwork,
 			mockFileSystem: mockFileSystem,
 			mockAlgorithm:  mockReducer,
-			mr:             mapreduce.New(mockFileSystem, mockNetwork, algorithms),
+			mockAlgFetcher: mockAlgFetcher,
+			mr:             mapreduce.New(mockFileSystem, mockNetwork, mockAlgFetcher),
 		}
 	})
 

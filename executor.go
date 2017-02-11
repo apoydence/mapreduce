@@ -1,28 +1,27 @@
 package mapreduce
 
 import (
-	"fmt"
 	"io"
 
 	"golang.org/x/net/context"
 )
 
 type Executor struct {
-	algs map[string]Algorithm
-	fs   FileSystem
+	algFetcher AlgorithmFetcher
+	fs         FileSystem
 }
 
-func NewExecutor(algs map[string]Algorithm, fs FileSystem) *Executor {
+func NewExecutor(algFetcher AlgorithmFetcher, fs FileSystem) *Executor {
 	return &Executor{
-		algs: algs,
-		fs:   fs,
+		algFetcher: algFetcher,
+		fs:         fs,
 	}
 }
 
 func (e *Executor) Execute(fileName, algName string, ctx context.Context) (result map[string][]byte, err error) {
-	alg, ok := e.algs[algName]
-	if !ok {
-		return nil, fmt.Errorf("unknown algorithm: %s", algName)
+	alg, err := e.algFetcher.Alg(algName)
+	if err != nil {
+		return nil, err
 	}
 
 	reader, err := e.fs.Reader(fileName, ctx)

@@ -44,10 +44,10 @@ func main() {
 	size := rand.Intn(100000)
 	println(size)
 	fileSystem := components.NewInMemoryFS(3, size)
-	executor := mapreduce.NewExecutor(algs, fileSystem)
+	executor := mapreduce.NewExecutor(mapreduce.AlgFetcherMap(algs), fileSystem)
 	network := components.NewInProcessNetwork(executor)
 
-	mapReduce := mapreduce.New(fileSystem, network, algs)
+	mapReduce := mapreduce.New(fileSystem, network, mapreduce.AlgFetcherMap(algs))
 
 	results, err := mapReduce.Calculate("some-name", "oddeven", context.Background())
 	if err != nil {

@@ -1,7 +1,6 @@
 package mapreduce
 
 import (
-	"fmt"
 	"math/rand"
 
 	"golang.org/x/net/context"
@@ -13,16 +12,16 @@ type Algorithm struct {
 }
 
 type MapReduce struct {
-	fs       FileSystem
-	network  Network
-	reducers map[string]Algorithm
+	fs         FileSystem
+	network    Network
+	algFetcher AlgorithmFetcher
 }
 
-func New(fs FileSystem, network Network, reducers map[string]Algorithm) MapReduce {
+func New(fs FileSystem, network Network, algFetcher AlgorithmFetcher) MapReduce {
 	return MapReduce{
-		fs:       fs,
-		network:  network,
-		reducers: reducers,
+		fs:         fs,
+		network:    network,
+		algFetcher: algFetcher,
 	}
 }
 
@@ -47,9 +46,9 @@ func (r MapReduce) Calculate(route, algName string, ctx context.Context) (finalR
 	}
 
 	finalResult = make(map[string][]byte)
-	reducer, ok := r.reducers[algName]
-	if !ok {
-		return nil, fmt.Errorf("Unknown algorithm: %s", algName)
+	reducer, err := r.algFetcher.Alg(algName)
+	if err != nil {
+		return nil, err
 	}
 
 	for key, results := range m {
