@@ -46,7 +46,7 @@ func (r MapReduce) Calculate(route, algName string, ctx context.Context) (finalR
 	}
 
 	finalResult = make(map[string][]byte)
-	reducer, err := r.algFetcher.Alg(algName)
+	reducer, err := r.algFetcher.Alg(algName, ctx)
 	if err != nil {
 		return nil, err
 	}

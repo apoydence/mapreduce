@@ -19,7 +19,7 @@ func NewExecutor(algFetcher AlgorithmFetcher, fs FileSystem) *Executor {
 }
 
 func (e *Executor) Execute(fileName, algName string, ctx context.Context) (result map[string][]byte, err error) {
-	alg, err := e.algFetcher.Alg(algName)
+	alg, err := e.algFetcher.Alg(algName, ctx)
 	if err != nil {
 		return nil, err
 	}
