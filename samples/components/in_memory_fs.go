@@ -23,7 +23,7 @@ func NewInMemoryFS(numOfNodes, size int) mapreduce.FileSystem {
 	}
 }
 
-func (f *InMemoryFS) Files(route string, ctx context.Context) (map[string][]string, error) {
+func (f *InMemoryFS) Files(route string, ctx context.Context, meta []byte) (map[string][]string, error) {
 	var nodeIDs []string
 	for i := 0; i < f.numOfNodes; i++ {
 		nodeIDs = append(nodeIDs, fmt.Sprint(i))
@@ -37,7 +37,7 @@ func (f *InMemoryFS) Files(route string, ctx context.Context) (map[string][]stri
 
 }
 
-func (f *InMemoryFS) Reader(name string, ctx context.Context) (func() ([]byte, error), error) {
+func (f *InMemoryFS) Reader(name string, ctx context.Context, meta []byte) (func() ([]byte, error), error) {
 	var count int
 	return func() ([]byte, error) {
 		count++

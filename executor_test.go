@@ -75,14 +75,14 @@ func TestExecutor(t *testing.T) {
 					return t
 				})
 				o.Spec("it uses the correct file", func(t TE) {
-					t.e.Execute("file", "a", context.Background())
+					t.e.Execute("file", "a", context.Background(), nil)
 					Expect(t, t.mockFileSystem.ReaderInput.File).To(Chain(
 						Receive(), Equal("file"),
 					))
 				})
 
 				o.Spec("it uses mapper for each value in file", func(t TE) {
-					t.e.Execute("file", "a", context.Background())
+					t.e.Execute("file", "a", context.Background(), nil)
 					s := toSliceBytes(t.mockMapper.MapInput.Value, 3)
 					Expect(t, s).To(Equal([][]byte{
 						[]byte("a"),
@@ -92,7 +92,7 @@ func TestExecutor(t *testing.T) {
 				})
 
 				o.Spec("it uses the reducer for each key", func(t TE) {
-					t.e.Execute("file", "a", context.Background())
+					t.e.Execute("file", "a", context.Background(), nil)
 					s := toSliceDoubleBytes(t.mockReducer.ReduceInput.Value, 1)
 					Expect(t, s).To(Contain([][]byte{
 						[]byte("a"),
@@ -102,7 +102,7 @@ func TestExecutor(t *testing.T) {
 				})
 
 				o.Spec("it returns a result for each key", func(t TE) {
-					result, err := t.e.Execute("file", "a", context.Background())
+					result, err := t.e.Execute("file", "a", context.Background(), nil)
 					Expect(t, err == nil).To(BeTrue())
 					Expect(t, result).To(HaveLen(1))
 
@@ -120,7 +120,7 @@ func TestExecutor(t *testing.T) {
 				})
 
 				o.Spec("it returns an error", func(t TE) {
-					_, err := t.e.Execute("file", "a", context.Background())
+					_, err := t.e.Execute("file", "a", context.Background(), nil)
 					Expect(t, err == nil).To(BeFalse())
 				})
 			})
@@ -135,7 +135,7 @@ func TestExecutor(t *testing.T) {
 			})
 
 			o.Spec("it returns an error", func(t TE) {
-				_, err := t.e.Execute("file", "a", context.Background())
+				_, err := t.e.Execute("file", "a", context.Background(), nil)
 				Expect(t, err == nil).To(BeFalse())
 			})
 		})
@@ -149,7 +149,7 @@ func TestExecutor(t *testing.T) {
 		})
 
 		o.Spec("it returns an error", func(t TE) {
-			_, err := t.e.Execute("file", "a", context.Background())
+			_, err := t.e.Execute("file", "a", context.Background(), nil)
 			Expect(t, err == nil).To(BeFalse())
 		})
 	})

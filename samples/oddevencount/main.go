@@ -49,7 +49,7 @@ func main() {
 
 	mapReduce := mapreduce.New(fileSystem, network, mapreduce.AlgFetcherMap(algs))
 
-	results, err := mapReduce.Calculate("some-name", "oddeven", context.Background())
+	results, err := mapReduce.Calculate("some-name", "oddeven", context.Background(), nil)
 	if err != nil {
 		log.Fatalf("Failed to calculate: %s", err)
 	}

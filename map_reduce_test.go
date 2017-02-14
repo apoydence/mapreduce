@@ -92,19 +92,19 @@ func TestMapReduce(t *testing.T) {
 				})
 
 				o.Spec("it does not return an error", func(t TMR) {
-					_, err := t.mr.Calculate("some-file", "some-alg", context.Background())
+					_, err := t.mr.Calculate("some-file", "some-alg", context.Background(), nil)
 					Expect(t, err == nil).To(BeTrue())
 				})
 
 				o.Spec("it uses the correct chain name", func(t TMR) {
-					t.mr.Calculate("some-file", "some-alg", context.Background())
+					t.mr.Calculate("some-file", "some-alg", context.Background(), nil)
 
 					s := toSlice(t.mockNetwork.ExecuteInput.AlgName, 2)
 					Expect(t, s).To(Equal([]string{"some-alg", "some-alg"}))
 				})
 
 				o.Spec("it executes each file on a corresponding node", func(t TMR) {
-					t.mr.Calculate("some-file", "some-alg", context.Background())
+					t.mr.Calculate("some-file", "some-alg", context.Background(), nil)
 
 					m := toMap(t.mockNetwork.ExecuteInput.File, t.mockNetwork.ExecuteInput.NodeID, 2)
 					Expect(t, m).To(HaveLen(2))
@@ -119,7 +119,7 @@ func TestMapReduce(t *testing.T) {
 				})
 
 				o.Spec("it returns the results", func(t TMR) {
-					result, _ := t.mr.Calculate("some-file", "some-alg", context.Background())
+					result, _ := t.mr.Calculate("some-file", "some-alg", context.Background(), nil)
 
 					Expect(t, result).To(HaveLen(2))
 					Expect(t, result["key-0"]).To(Equal([]byte("some-value-0")))
@@ -127,7 +127,7 @@ func TestMapReduce(t *testing.T) {
 				})
 
 				o.Spec("it does not need the reducer", func(t TMR) {
-					t.mr.Calculate("some-file", "some-alg", context.Background())
+					t.mr.Calculate("some-file", "some-alg", context.Background(), nil)
 
 					Expect(t, t.mockAlgorithm.ReduceCalled).To(Always(HaveLen(0)))
 				})
@@ -169,12 +169,12 @@ func TestMapReduce(t *testing.T) {
 					})
 
 					o.Spec("it returns the combined results", func(t TMR) {
-						result, _ := t.mr.Calculate("some-file", "some-alg", context.Background())
+						result, _ := t.mr.Calculate("some-file", "some-alg", context.Background(), nil)
 						_ = result
 					})
 
 					o.Spec("it combines the results with the reducer", func(t TMR) {
-						t.mr.Calculate("some-file", "some-alg", context.Background())
+						t.mr.Calculate("some-file", "some-alg", context.Background(), nil)
 
 						Expect(t, t.mockAlgorithm.ReduceInput.Value).To(Chain(
 							Receive(), HaveLen(2),
@@ -182,7 +182,7 @@ func TestMapReduce(t *testing.T) {
 					})
 
 					o.Spec("it combines until there is a single result for the key", func(t TMR) {
-						t.mr.Calculate("some-file", "some-alg", context.Background())
+						t.mr.Calculate("some-file", "some-alg", context.Background(), nil)
 
 						Expect(t, t.mockAlgorithm.ReduceCalled).To(HaveLen(5))
 					})
@@ -195,7 +195,7 @@ func TestMapReduce(t *testing.T) {
 					})
 
 					o.Spec("it returns an error", func(t TMR) {
-						_, err := t.mr.Calculate("some-file", "some-alg", context.Background())
+						_, err := t.mr.Calculate("some-file", "some-alg", context.Background(), nil)
 						Expect(t, err == nil).To(BeFalse())
 					})
 				})
@@ -211,7 +211,7 @@ func TestMapReduce(t *testing.T) {
 
 			// TODO: We should retry with different nodes
 			o.Spec("it returns an error", func(t TMR) {
-				_, err := t.mr.Calculate("some-file", "some-alg", context.Background())
+				_, err := t.mr.Calculate("some-file", "some-alg", context.Background(), nil)
 				Expect(t, err == nil).To(BeFalse())
 			})
 		})
@@ -225,7 +225,7 @@ func TestMapReduce(t *testing.T) {
 		})
 
 		o.Spec("it returns an error", func(t TMR) {
-			_, err := t.mr.Calculate("some-file", "some-alg", context.Background())
+			_, err := t.mr.Calculate("some-file", "some-alg", context.Background(), nil)
 			Expect(t, err == nil).To(BeFalse())
 		})
 	})

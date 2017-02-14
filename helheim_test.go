@@ -10,39 +10,12 @@ import (
 	"golang.org/x/net/context"
 )
 
-type mockAlgorithmFetcher struct {
-	AlgCalled chan bool
-	AlgInput  struct {
-		Name chan string
-		Ctx  chan context.Context
-	}
-	AlgOutput struct {
-		Alg chan mapreduce.Algorithm
-		Err chan error
-	}
-}
-
-func newMockAlgorithmFetcher() *mockAlgorithmFetcher {
-	m := &mockAlgorithmFetcher{}
-	m.AlgCalled = make(chan bool, 100)
-	m.AlgInput.Name = make(chan string, 100)
-	m.AlgInput.Ctx = make(chan context.Context, 100)
-	m.AlgOutput.Alg = make(chan mapreduce.Algorithm, 100)
-	m.AlgOutput.Err = make(chan error, 100)
-	return m
-}
-func (m *mockAlgorithmFetcher) Alg(name string, ctx context.Context) (alg mapreduce.Algorithm, err error) {
-	m.AlgCalled <- true
-	m.AlgInput.Name <- name
-	m.AlgInput.Ctx <- ctx
-	return <-m.AlgOutput.Alg, <-m.AlgOutput.Err
-}
-
 type mockFileSystem struct {
 	FilesCalled chan bool
 	FilesInput  struct {
 		Route chan string
 		Ctx   chan context.Context
+		Meta  chan []byte
 	}
 	FilesOutput struct {
 		Files chan map[string][]string
@@ -52,6 +25,7 @@ type mockFileSystem struct {
 	ReaderInput  struct {
 		File chan string
 		Ctx  chan context.Context
+		Meta chan []byte
 	}
 	ReaderOutput struct {
 		Reader chan func() (data []byte, err error)
@@ -64,25 +38,29 @@ func newMockFileSystem() *mockFileSystem {
 	m.FilesCalled = make(chan bool, 100)
 	m.FilesInput.Route = make(chan string, 100)
 	m.FilesInput.Ctx = make(chan context.Context, 100)
+	m.FilesInput.Meta = make(chan []byte, 100)
 	m.FilesOutput.Files = make(chan map[string][]string, 100)
 	m.FilesOutput.Err = make(chan error, 100)
 	m.ReaderCalled = make(chan bool, 100)
 	m.ReaderInput.File = make(chan string, 100)
 	m.ReaderInput.Ctx = make(chan context.Context, 100)
+	m.ReaderInput.Meta = make(chan []byte, 100)
 	m.ReaderOutput.Reader = make(chan func() (data []byte, err error), 100)
 	m.ReaderOutput.Err = make(chan error, 100)
 	return m
 }
-func (m *mockFileSystem) Files(route string, ctx context.Context) (files map[string][]string, err error) {
+func (m *mockFileSystem) Files(route string, ctx context.Context, meta []byte) (files map[string][]string, err error) {
 	m.FilesCalled <- true
 	m.FilesInput.Route <- route
 	m.FilesInput.Ctx <- ctx
+	m.FilesInput.Meta <- meta
 	return <-m.FilesOutput.Files, <-m.FilesOutput.Err
 }
-func (m *mockFileSystem) Reader(file string, ctx context.Context) (reader func() (data []byte, err error), err error) {
+func (m *mockFileSystem) Reader(file string, ctx context.Context, meta []byte) (reader func() (data []byte, err error), err error) {
 	m.ReaderCalled <- true
 	m.ReaderInput.File <- file
 	m.ReaderInput.Ctx <- ctx
+	m.ReaderInput.Meta <- meta
 	return <-m.ReaderOutput.Reader, <-m.ReaderOutput.Err
 }
 
@@ -118,6 +96,7 @@ type mockNetwork struct {
 	ExecuteInput  struct {
 		File, AlgName, NodeID chan string
 		Ctx                   chan context.Context
+		Meta                  chan []byte
 	}
 	ExecuteOutput struct {
 		Result chan map[string][]byte
@@ -132,16 +111,18 @@ func newMockNetwork() *mockNetwork {
 	m.ExecuteInput.AlgName = make(chan string, 100)
 	m.ExecuteInput.NodeID = make(chan string, 100)
 	m.ExecuteInput.Ctx = make(chan context.Context, 100)
+	m.ExecuteInput.Meta = make(chan []byte, 100)
 	m.ExecuteOutput.Result = make(chan map[string][]byte, 100)
 	m.ExecuteOutput.Err = make(chan error, 100)
 	return m
 }
-func (m *mockNetwork) Execute(file, algName, nodeID string, ctx context.Context) (result map[string][]byte, err error) {
+func (m *mockNetwork) Execute(file, algName, nodeID string, ctx context.Context, meta []byte) (result map[string][]byte, err error) {
 	m.ExecuteCalled <- true
 	m.ExecuteInput.File <- file
 	m.ExecuteInput.AlgName <- algName
 	m.ExecuteInput.NodeID <- nodeID
 	m.ExecuteInput.Ctx <- ctx
+	m.ExecuteInput.Meta <- meta
 	return <-m.ExecuteOutput.Result, <-m.ExecuteOutput.Err
 }
 
@@ -168,4 +149,32 @@ func (m *mockReducer) Reduce(value [][]byte) (reduced [][]byte, err error) {
 	m.ReduceCalled <- true
 	m.ReduceInput.Value <- value
 	return <-m.ReduceOutput.Reduced, <-m.ReduceOutput.Err
+}
+
+type mockAlgorithmFetcher struct {
+	AlgCalled chan bool
+	AlgInput  struct {
+		Name chan string
+		Meta chan []byte
+	}
+	AlgOutput struct {
+		Alg chan mapreduce.Algorithm
+		Err chan error
+	}
+}
+
+func newMockAlgorithmFetcher() *mockAlgorithmFetcher {
+	m := &mockAlgorithmFetcher{}
+	m.AlgCalled = make(chan bool, 100)
+	m.AlgInput.Name = make(chan string, 100)
+	m.AlgInput.Meta = make(chan []byte, 100)
+	m.AlgOutput.Alg = make(chan mapreduce.Algorithm, 100)
+	m.AlgOutput.Err = make(chan error, 100)
+	return m
+}
+func (m *mockAlgorithmFetcher) Alg(name string, meta []byte) (alg mapreduce.Algorithm, err error) {
+	m.AlgCalled <- true
+	m.AlgInput.Name <- name
+	m.AlgInput.Meta <- meta
+	return <-m.AlgOutput.Alg, <-m.AlgOutput.Err
 }

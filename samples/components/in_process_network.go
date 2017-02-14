@@ -16,6 +16,6 @@ func NewInProcessNetwork(e *mapreduce.Executor) *InProcessNetwork {
 	}
 }
 
-func (n *InProcessNetwork) Execute(file, algName, nodeID string, ctx context.Context) (result map[string][]byte, err error) {
-	return n.e.Execute(file, algName, ctx)
+func (n *InProcessNetwork) Execute(file, algName, nodeID string, ctx context.Context, meta []byte) (result map[string][]byte, err error) {
+	return n.e.Execute(file, algName, ctx, meta)
 }

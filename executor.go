@@ -18,13 +18,13 @@ func NewExecutor(algFetcher AlgorithmFetcher, fs FileSystem) *Executor {
 	}
 }
 
-func (e *Executor) Execute(fileName, algName string, ctx context.Context) (result map[string][]byte, err error) {
-	alg, err := e.algFetcher.Alg(algName, ctx)
+func (e *Executor) Execute(fileName, algName string, ctx context.Context, meta []byte) (result map[string][]byte, err error) {
+	alg, err := e.algFetcher.Alg(algName, meta)
 	if err != nil {
 		return nil, err
 	}
 
-	reader, err := e.fs.Reader(fileName, ctx)
+	reader, err := e.fs.Reader(fileName, ctx, meta)
 	if err != nil {
 		return nil, err
 	}

@@ -1,6 +1,7 @@
 package mapreduce
 
 import (
+	"log"
 	"math/rand"
 
 	"golang.org/x/net/context"
@@ -25,8 +26,8 @@ func New(fs FileSystem, network Network, algFetcher AlgorithmFetcher) MapReduce 
 	}
 }
 
-func (r MapReduce) Calculate(route, algName string, ctx context.Context) (finalResult map[string][]byte, err error) {
-	files, err := r.fs.Files(route, ctx)
+func (r MapReduce) Calculate(route, algName string, ctx context.Context, meta []byte) (finalResult map[string][]byte, err error) {
+	files, err := r.fs.Files(route, ctx, meta)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +36,9 @@ func (r MapReduce) Calculate(route, algName string, ctx context.Context) (finalR
 	for fileName, ids := range files {
 		// TODO: Balance load across nodes
 		id := ids[rand.Intn(len(ids))]
-		result, err := r.network.Execute(fileName, algName, id, ctx)
+		log.Printf("Start calculation for file %s on %s with algorithm %s", fileName, id, algName)
+
+		result, err := r.network.Execute(fileName, algName, id, ctx, meta)
 		if err != nil {
 			return nil, err
 		}
@@ -46,7 +49,7 @@ func (r MapReduce) Calculate(route, algName string, ctx context.Context) (finalR
 	}
 
 	finalResult = make(map[string][]byte)
-	reducer, err := r.algFetcher.Alg(algName, ctx)
+	reducer, err := r.algFetcher.Alg(algName, meta)
 	if err != nil {
 		return nil, err
 	}
