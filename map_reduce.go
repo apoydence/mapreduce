@@ -3,6 +3,7 @@
 package mapreduce
 
 import (
+	"io/ioutil"
 	"log"
 	"math/rand"
 
@@ -15,6 +16,21 @@ type Algorithm struct {
 	Reducer
 }
 
+// MapReduceOption is used to configure a new MapReduce.
+type MapReduceOption func(*MapReduce)
+
+// Log is used to write debug logs.
+type Log interface {
+	Printf(format string, v ...interface{})
+}
+
+// WithLogger is used to set the given logger.
+func WithLogger(l Log) MapReduceOption {
+	return func(r *MapReduce) {
+		r.log = l
+	}
+}
+
 // MapReduce is used to invoke a Map/Reduce algorithm across data on various remote nodes.
 //
 // It should be created with New().
@@ -22,15 +38,23 @@ type MapReduce struct {
 	fs         FileSystem
 	network    Network
 	algFetcher AlgorithmFetcher
+	log        Log
 }
 
 // New returns a new MapReduce.
-func New(fs FileSystem, network Network, algFetcher AlgorithmFetcher) MapReduce {
-	return MapReduce{
+func New(fs FileSystem, network Network, algFetcher AlgorithmFetcher, opts ...MapReduceOption) MapReduce {
+	r := MapReduce{
 		fs:         fs,
 		network:    network,
 		algFetcher: algFetcher,
+		log:        log.New(ioutil.Discard, "", 0),
 	}
+
+	for _, o := range opts {
+		o(&r)
+	}
+
+	return r
 }
 
 // Calculate runs the given algorithm for the files returned from FileSystem for the given route and meta information.
@@ -45,7 +69,7 @@ func (r MapReduce) Calculate(route, algName string, ctx context.Context, meta []
 	for fileName, ids := range files {
 		// TODO: Balance load across nodes
 		id := ids[rand.Intn(len(ids))]
-		log.Printf("Start calculation for file %s on %s with algorithm %s", fileName, id, algName)
+		r.log.Printf("Start calculation for file %s on %s with algorithm %s", fileName, id, algName)
 
 		result, err := r.network.Execute(fileName, algName, id, ctx, meta)
 		if err != nil {

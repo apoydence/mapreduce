@@ -53,13 +53,18 @@ func TestMapReduce(t *testing.T) {
 		mockAlgFetcher.AlgOutput.Alg <- mapreduce.Algorithm{Reducer: mockReducer}
 		close(mockAlgFetcher.AlgOutput.Err)
 
+		var opts []mapreduce.MapReduceOption
+		if testing.Verbose() {
+			opts = append(opts, mapreduce.WithLogger(log.New(os.Stderr, "", log.LstdFlags)))
+		}
+
 		return TMR{
 			T:              t,
 			mockNetwork:    mockNetwork,
 			mockFileSystem: mockFileSystem,
 			mockAlgorithm:  mockReducer,
 			mockAlgFetcher: mockAlgFetcher,
-			mr:             mapreduce.New(mockFileSystem, mockNetwork, mockAlgFetcher),
+			mr:             mapreduce.New(mockFileSystem, mockNetwork, mockAlgFetcher, opts...),
 		}
 	})
 
