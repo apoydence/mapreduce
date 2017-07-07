@@ -1,3 +1,5 @@
+// mapreduce is used to run calculations on data the is available across several remote nodes.
+// Each node that has some data of interst will run calculations against it.
 package mapreduce
 
 import (
@@ -7,17 +9,22 @@ import (
 	"golang.org/x/net/context"
 )
 
+// Algorithm stores a Mapper and Reducer.
 type Algorithm struct {
 	Mapper
 	Reducer
 }
 
+// MapReduce is used to invoke a Map/Reduce algorithm across data on various remote nodes.
+//
+// It should be created with New().
 type MapReduce struct {
 	fs         FileSystem
 	network    Network
 	algFetcher AlgorithmFetcher
 }
 
+// New returns a new MapReduce.
 func New(fs FileSystem, network Network, algFetcher AlgorithmFetcher) MapReduce {
 	return MapReduce{
 		fs:         fs,
@@ -26,6 +33,8 @@ func New(fs FileSystem, network Network, algFetcher AlgorithmFetcher) MapReduce 
 	}
 }
 
+// Calculate runs the given algorithm for the files returned from FileSystem for the given route and meta information.
+// It uses the Network to run the calculations across the remote nodes that report having the given data.
 func (r MapReduce) Calculate(route, algName string, ctx context.Context, meta []byte) (finalResult map[string][]byte, err error) {
 	files, err := r.fs.Files(route, ctx, meta)
 	if err != nil {

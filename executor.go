@@ -6,11 +6,16 @@ import (
 	"golang.org/x/net/context"
 )
 
+// Executor is used to apply algorithms to data. It maps and then returns the
+// reduced data from the given algorithm.
+//
+// An Executor has to be created with NewExecutor().
 type Executor struct {
 	algFetcher AlgorithmFetcher
 	fs         FileSystem
 }
 
+// NewExecutor returns a new Executor.
 func NewExecutor(algFetcher AlgorithmFetcher, fs FileSystem) *Executor {
 	return &Executor{
 		algFetcher: algFetcher,
@@ -18,6 +23,7 @@ func NewExecutor(algFetcher AlgorithmFetcher, fs FileSystem) *Executor {
 	}
 }
 
+// Execute maps local data from the file (fileName) via the mapper given from the algorithm (algName) and reduces it.
 func (e *Executor) Execute(fileName, algName string, ctx context.Context, meta []byte) (result map[string][]byte, err error) {
 	alg, err := e.algFetcher.Alg(algName, meta)
 	if err != nil {
@@ -54,6 +60,7 @@ func (e *Executor) Execute(fileName, algName string, ctx context.Context, meta [
 	return result, nil
 }
 
+// consumeFile maps data from the reader to the according keys.
 func (e *Executor) consumeFile(alg Mapper, reader func() ([]byte, error)) (map[string][][]byte, error) {
 	m := make(map[string][][]byte)
 	for {
