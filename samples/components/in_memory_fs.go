@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/apoydence/mapreduce"
+	"github.com/poy/mapreduce"
 )
 
 type InMemoryFS struct {

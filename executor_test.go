@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/apoydence/eachers/testhelpers"
-	"github.com/apoydence/mapreduce"
-	"github.com/apoydence/onpar"
-	. "github.com/apoydence/onpar/expect"
-	. "github.com/apoydence/onpar/matchers"
+	"github.com/poy/eachers/testhelpers"
+	"github.com/poy/mapreduce"
+	"github.com/poy/onpar"
+	. "github.com/poy/onpar/expect"
+	. "github.com/poy/onpar/matchers"
 )
 
 type TE struct {

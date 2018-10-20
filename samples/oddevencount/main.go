@@ -8,8 +8,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/apoydence/mapreduce"
-	"github.com/apoydence/mapreduce/samples/components"
+	"github.com/poy/mapreduce"
+	"github.com/poy/mapreduce/samples/components"
 )
 
 func main() {

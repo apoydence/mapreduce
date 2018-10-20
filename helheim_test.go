@@ -6,7 +6,7 @@
 package mapreduce_test
 
 import (
-	"github.com/apoydence/mapreduce"
+	"github.com/poy/mapreduce"
 	"golang.org/x/net/context"
 )
 

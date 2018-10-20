@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/apoydence/onpar"
+	"github.com/poy/onpar"
 )
 
 func TestMain(m *testing.M) {
